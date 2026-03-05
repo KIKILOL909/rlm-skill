@@ -1,16 +1,16 @@
 ---
-description: "RLM (Recursive Language Model) agent for processing large contexts. Use when dealing with massive files, logs, repos, or data that exceeds context windows. Trigger: @rlm"
+description: "RLM (Recursive Language Model) agent — structured 6-step protocol for processing large contexts. Use when dealing with massive files, logs, repos, or data that exceeds context windows. Trigger: @rlm"
 mode: subagent
 tools:
   write: false
   edit: false
+  webfetch: false
+  glob: true
 ---
 
-# RLM - Recursive Language Model Pattern
+# RLM - Recursive Language Model Protocol
 
-Based on MIT's RLM paper (arXiv:2512.24601). Instead of stuffing data into the token window, treat it as an external variable in a REPL and write code to programmatically examine, decompose, and search it. Only results enter context.
-
-## Key Principle
+Based on MIT's RLM paper (arXiv:2512.24601) and DSPy's structured REPL pattern. Explore data programmatically — only printed results enter context.
 
 > **Tokens are CPU, not storage.** Never dump raw data into context. Write code to extract what matters, print only the summary.
 
@@ -21,41 +21,75 @@ Based on MIT's RLM paper (arXiv:2512.24601). Instead of stuffing data into the t
 - Multi-step data extraction where each step depends on prior results
 - Any task where raw data would burn tokens without adding value
 
-## Pattern 1: Single-Pass (most tasks)
+## Decision Logic
 
-Write code to process the file in a sandbox and only print a summary:
+| Size | Protocol |
+|------|----------|
+| < 5KB | Read directly — no RLM needed |
+| 5KB-500KB | Steps 1-3 (METADATA, PEEK, SEARCH) |
+| 500KB+ | Full 6-step protocol with sub-agent decomposition |
+
+## 6-Step Protocol
+
+Execute IN ORDER. Each step uses `python3 -c`. Raw data never enters context.
+
+### Step 1: METADATA
+
+Assess file type, size, line count, preview (200 chars). Use **glob** tool for multi-file discovery (never `find` via Bash). **WebFetch is blocked** — download via python3 urllib, save locally, then process.
+
+### Step 2: PEEK
+
+Sample head (20 lines), tail (10 lines), random slices to understand structure.
+
+### Step 3: SEARCH
+
+Targeted extraction: regex, AST parsing, JSON key traversal based on PEEK findings.
+
+### Step 4: ANALYZE (500KB+ only)
+
+Sub-agent decomposition — up to 15 sub-queries. Use @explore sub-agents for parallel chunk analysis. Extract each chunk via python3 -c, pass to sub-agent:
 
 ```python
-with open('/path/to/huge.log') as f:
+with open('/path/to/file') as f:
     lines = f.readlines()
-errors = [l for l in lines if 'ERROR' in l]
-print(f"Found {len(errors)} errors in {len(lines)} lines")
-for e in errors[:20]:
-    print(e.strip())
+chunk = lines[START:END]
+print(f'=== Chunk N ({len(chunk)} lines) ===')
+for l in chunk: print(l.rstrip())
 ```
 
-## Pattern 2: Recursive Decomposition
+Sub-query types: chunk analysis, cross-reference, semantic filter, recursive drill.
 
-When single-pass isn't enough, chain multiple code executions:
+### Step 5: SYNTHESIZE
 
-1. **Survey**: count files, measure sizes, identify structure
-2. **Slice**: parse specific file types, extract metadata
-3. **Deep-dive**: read targeted sections of interesting files
+Combine findings, cross-reference, resolve conflicts.
 
-## Pattern 3: RLM CLI (50MB+ data)
+### Step 6: SUBMIT
 
-For recursive sub-LLM decomposition on massive inputs:
+Explicit completion with structured output:
+
+```
+=== RLM SUBMIT ===
+Query: [original question]
+Confidence: [high/medium/low]
+Protocol: [steps executed]
+Sub-queries: [N spawned, N completed]
+Data processed: [file size]
+Context used: [estimated tokens]
+
+[Final answer]
+=== END ===
+```
+
+## Iteration Budget
+
+| Parameter | Limit |
+|-----------|-------|
+| Max REPL iterations | 20 |
+| Max output per step | 15,000 chars |
+| Max sub-queries | 15 |
+
+## Massive Data (50MB+)
 
 ```bash
 rlm-cli query "Find all security issues" --file /path/to/large.log --stats
-rlm-cli query "List all classes" --repo /path/to/repo --stats
 ```
-
-## Decision Matrix
-
-| Situation | Use |
-|-----------|-----|
-| Large file, simple extraction | Pattern 1: single-pass code execution |
-| Multi-file analysis, need structure | Pattern 2: sequential code executions |
-| Truly massive data (50MB+), needs recursive sub-LLM decomposition | Pattern 3: rlm-cli |
-| Need local/private inference (no API calls) | Pattern 3: rlm-cli + vLLM |
