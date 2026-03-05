@@ -11,8 +11,8 @@
     {
       "name": "rlm",
       "source": "./",
-      "description": "Recursive Language Model pattern — keeps large data out of context by writing code to process it externally. Based on MIT's RLM paper.",
-      "version": "0.3.0",
+      "description": "Recursive Language Model pattern \u2014 keeps large data out of context by writing code to process it externally. Based on MIT's RLM paper.",
+      "version": "0.3.1",
       "author": {
         "name": "Omar"
       },
