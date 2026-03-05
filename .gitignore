@@ -9,3 +9,5 @@ uv.lock
 results*.json
 # Cloned repos used for benchmarks
 benchmarks/repos/
+# Generated test data
+tests/testbench_*.json
