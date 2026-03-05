@@ -61,7 +61,7 @@ Check token savings:
 /rlm:stats
 ```
 
-### Custom Tools (Both Platforms)
+### Custom Tools
 
 The plugin provides MCP tools (Claude Code) and custom tools (OpenCode):
 
@@ -73,7 +73,48 @@ The plugin provides MCP tools (Claude Code) and custom tools (OpenCode):
 | `rlm_search` | Search indexed content with smart snippets + BM25 ranking + 3-layer fallback (porter/trigram/fuzzy). |
 | `rlm_batch_execute` | Run multiple commands + search queries in ONE call. Saves tool-call overhead. |
 | `rlm_fetch_and_index` | Fetch URL, convert HTML to text, chunk and index. Raw page never enters context. |
-| `rlm_stats` | Show knowledge base statistics. |
+| `rlm_stats` | Show knowledge base statistics (indexed sources, chunk count, DB size). |
+
+#### Smart Snippets
+
+Search results use **smart snippet extraction** — instead of returning full chunks, the search highlights windows around matching query terms with `...` context bridges. This minimizes tokens while preserving relevance.
+
+#### 3-Layer Search Fallback
+
+1. **Porter stemming** (FTS5 default) — handles word variants (`running` matches `run`)
+2. **Trigram substring** — catches partial matches (`config` matches `configuration`)
+3. **Fuzzy Levenshtein** — tolerates typos (`reuslt` matches `result`)
+
+Results are merged and deduplicated with BM25 ranking.
+
+#### Batch Execute
+
+`rlm_batch_execute` accepts multiple shell commands and search queries in a single tool call:
+
+```json
+{
+  "commands": [
+    { "language": "python", "code": "import json; print(len(json.load(open('data.json'))))" },
+    { "language": "shell", "code": "wc -l *.log" }
+  ],
+  "queries": ["error handling", "timeout config"]
+}
+```
+
+This saves tool-call overhead when you need to run several operations at once.
+
+#### Fetch and Index
+
+`rlm_fetch_and_index` downloads a URL, converts HTML to clean text (stripping scripts, styles, and tags), chunks the content, and indexes it into the FTS5 knowledge base. The raw page never enters context:
+
+```json
+{
+  "url": "https://docs.example.com/api-reference",
+  "source": "API Docs"
+}
+```
+
+Then use `rlm_search` with `source: "API Docs"` to query specific sections.
 
 ### CLI Tool
 
@@ -92,54 +133,15 @@ rlm-cli query "Find bugs" --repo . --backend openai --model Qwen/Qwen3-8B --base
 
 ### Hooks & Interceptors
 
-**Claude Code** — PreToolUse hook (`hooks/pretooluse-rlm.mjs`) fires before `Read`, `Bash`, and `WebFetch` tool calls.
+**Claude Code** — PreToolUse hook (`hooks/pretooluse-rlm.mjs`) fires before `Read`, `Bash`, and `WebFetch` tool calls. Uses `updatedInput` for silent rewriting — the model sees the rewritten result without knowing the original was intercepted.
 
 **OpenCode** — Plugin interceptor (`plugins/rlm-interceptor.ts`) uses `tool.execute.before` to silently rewrite large file reads into metadata scripts via `output.args` modification.
 
 Both platforms:
-- Rewrite reads of files >5KB into metadata summaries (size, head/tail preview, protocol instructions)
+- Rewrite reads of files >5KB into metadata summaries (size, line count, head/tail preview, protocol instructions)
 - Detect large-output commands (`cat`, `grep -r`, `curl`, `Get-Content`, `Select-String`, etc.)
 - Redirect WebFetch to python urllib download + process
 - Log events to `~/.rlm/stats/events.jsonl` for the token savings dashboard
-
-## Project Structure
-
-```
-rlm-skill/
-├── .claude-plugin/
-│   ├── marketplace.json       # Marketplace registry
-│   └── plugin.json            # Claude Code plugin manifest
-├── .opencode/
-│   ├── agents/
-│   │   └── rlm.md             # OpenCode agent definition
-│   ├── commands/
-│   │   ├── rlm.md             # /rlm command for OpenCode
-│   │   └── rlm-stats.md       # /rlm-stats command for OpenCode
-│   └── plugins/
-│       ├── rlm-interceptor.ts  # Intercept + rewrite + custom tools
-│       ├── rlm-store.ts        # FTS5 knowledge base (SQLite)
-│       └── rlm-executor.ts     # Sandbox subprocess executor
-├── mcp/
-│   ├── server.mjs             # MCP server (rlm_execute/search/index)
-│   └── store.mjs              # FTS5 knowledge base (shared)
-├── hooks/
-│   ├── hooks.json             # Hook configuration
-│   └── pretooluse-rlm.mjs    # Silent rewrite hook (updatedInput)
-├── skills/
-│   ├── rlm/
-│   │   └── SKILL.md           # Skill instructions
-│   └── stats/
-│       └── SKILL.md           # Token savings dashboard skill
-├── src/
-│   ├── __init__.py
-│   ├── cli.py                 # RLM CLI tool (rlm-cli)
-│   └── stats.py               # Token savings dashboard (rlm-stats)
-├── tests/
-│   └── test_plugin_structure.py
-├── pyproject.toml
-├── LICENSE
-└── README.md
-```
 
 ## How It Works
 
@@ -150,12 +152,90 @@ Traditional:  LLM(prompt + 500MB_data) → burns entire context window
 RLM pattern:  LLM writes code → code runs on data → only stdout enters context
 ```
 
-The OpenCode plugin adds three layers:
-1. **Interceptor** — silently rewrites `Read`/`Bash`/`WebFetch` calls that would dump large data into context
-2. **Knowledge Base** — FTS5 SQLite with porter+trigram dual tables for indexing and searching large content
-3. **Sandbox Executor** — isolated subprocess execution, only stdout returns to the model
+### Architecture
 
-For most tasks, writing code to process data externally is faster, cheaper, and equally accurate. The `rlm-cli` tool adds recursive sub-LLM decomposition for truly massive datasets (50MB+).
+```
+┌─────────────────────────────────────────────────────────┐
+│  Claude Code / OpenCode                                 │
+│                                                         │
+│  ┌──────────────┐    ┌──────────────┐                   │
+│  │  Hook /       │    │  MCP Server / │                  │
+│  │  Interceptor  │    │  Plugin Tools │                  │
+│  │              │    │              │                    │
+│  │  Read ──┐    │    │  rlm_execute │                   │
+│  │  Bash ──┤    │    │  rlm_search  │                   │
+│  │  Web  ──┘    │    │  rlm_index   │                   │
+│  │    ↓         │    │  rlm_batch   │                   │
+│  │  Rewrite to  │    │  rlm_fetch   │                   │
+│  │  metadata    │    │  rlm_stats   │                   │
+│  └──────────────┘    └──────┬───────┘                   │
+│                             │                           │
+│                    ┌────────▼────────┐                   │
+│                    │  FTS5 Knowledge │                   │
+│                    │  Base (SQLite)  │                   │
+│                    │                 │                   │
+│                    │  Porter + Tri-  │                   │
+│                    │  gram + Fuzzy   │                   │
+│                    └─────────────────┘                   │
+│                                                         │
+│                    ┌─────────────────┐                   │
+│                    │  Sandbox        │                   │
+│                    │  Executor       │                   │
+│                    │                 │                   │
+│                    │  python/js/sh   │                   │
+│                    │  stdout only →  │                   │
+│                    │  back to model  │                   │
+│                    └─────────────────┘                   │
+└─────────────────────────────────────────────────────────┘
+```
+
+The plugin operates in three layers:
+
+1. **Interceptor** — silently rewrites `Read`/`Bash`/`WebFetch` calls that would dump large data into context. The model receives a metadata summary with file size, line count, and head/tail preview instead of raw content.
+
+2. **Knowledge Base** — FTS5 SQLite with porter stemming + trigram substring dual virtual tables. Content is chunked (2000 chars, 200 overlap), indexed, and searchable with smart snippet extraction and BM25 ranking.
+
+3. **Sandbox Executor** — isolated subprocess execution (python, javascript, shell). File content is injected as a variable (`FILE_CONTENT`), code runs externally, and only stdout returns to the model.
+
+## Project Structure
+
+```
+rlm-skill/
+├── .claude-plugin/
+│   ├── marketplace.json       # Marketplace registry
+│   └── plugin.json            # Claude Code plugin manifest (incl. MCP)
+├── .opencode/
+│   ├── agents/
+│   │   └── rlm.md             # OpenCode agent definition
+│   ├── commands/
+│   │   ├── rlm.md             # /rlm command for OpenCode
+│   │   └── rlm-stats.md       # /rlm-stats command for OpenCode
+│   └── plugins/
+│       ├── rlm-interceptor.ts  # Intercept + rewrite + 5 custom tools
+│       ├── rlm-store.ts        # FTS5 knowledge base (SQLite)
+│       └── rlm-executor.ts     # Sandbox subprocess executor
+├── mcp/
+│   ├── server.mjs             # MCP server (7 tools)
+│   ├── store.mjs              # FTS5 knowledge base (shared)
+│   └── package.json           # MCP dependencies
+├── hooks/
+│   ├── hooks.json             # Hook configuration
+│   └── pretooluse-rlm.mjs     # Silent rewrite hook (updatedInput)
+├── skills/
+│   ├── rlm/
+│   │   └── SKILL.md           # Skill instructions
+│   └── stats/
+│       └── SKILL.md           # Token savings dashboard skill
+├── src/
+│   ├── __init__.py
+│   ├── cli.py                 # RLM CLI tool (rlm-cli)
+│   └── stats.py               # Token savings dashboard (rlm-stats)
+├── tests/
+│   └── test_plugin_structure.py  # 23 structural tests
+├── pyproject.toml
+├── LICENSE
+└── README.md
+```
 
 ## Benchmarks
 
