@@ -176,6 +176,30 @@ function handleBash(input) {
   var command = toolInput.command;
   if (!command) return null;
 
+  var cwd = input.cwd || ".";
+
+  // Track python commands that open() large files (RLM pattern — log for stats, don't block)
+  if (/\bpython[23]?\b/.test(command)) {
+    var openMatches = command.match(/open\s*\(\s*['"]([^'"]+)['"]/g);
+    if (openMatches) {
+      for (var i = 0; i < openMatches.length; i++) {
+        var pathMatch = openMatches[i].match(/open\s*\(\s*['"]([^'"]+)['"]/);
+        if (pathMatch) {
+          try {
+            var resolved = path.resolve(cwd, pathMatch[1]);
+            var stat = fs.statSync(resolved);
+            var pattern = suggestPattern(stat.size);
+            if (pattern > 0) {
+              logEvent(pathMatch[1], stat.size, pattern);
+            }
+          } catch (e) {
+            // file doesn't exist or can't stat
+          }
+        }
+      }
+    }
+  }
+
   var isLargeOutputCmd = LARGE_OUTPUT_COMMANDS.some(function (re) {
     return re.test(command);
   });
@@ -185,13 +209,12 @@ function handleBash(input) {
   var fileMatch = command.match(/(?:cat|head|tail)\s+(?:-[^\s]+\s+)*["']?([^"'\s|>]+)/);
   if (fileMatch) {
     try {
-      var cwd = input.cwd || ".";
-      var resolved = path.resolve(cwd, fileMatch[1]);
-      var stat = fs.statSync(resolved);
-      var pattern = suggestPattern(stat.size);
-      if (pattern > 0) {
-        logEvent(fileMatch[1], stat.size, pattern);
-        var advice = patternAdvice(pattern, formatSize(stat.size));
+      var resolvedFile = path.resolve(cwd, fileMatch[1]);
+      var fileStat = fs.statSync(resolvedFile);
+      var filePattern = suggestPattern(fileStat.size);
+      if (filePattern > 0) {
+        logEvent(fileMatch[1], fileStat.size, filePattern);
+        var advice = patternAdvice(filePattern, formatSize(fileStat.size));
         return {
           hookSpecificOutput: {
             hookEventName: "PreToolUse",
