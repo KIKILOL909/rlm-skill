@@ -29,7 +29,7 @@ import time
 from pathlib import Path
 
 
-def collect_repo_source(repo_path: str, extensions: list[str] | None = None) -> str:
+def collect_repo_source(repo_path, extensions=None):
     """Collect all source files from a repo into a single string."""
     if extensions is None:
         extensions = [".py", ".js", ".ts", ".tsx", ".rs", ".go", ".c", ".h", ".java"]

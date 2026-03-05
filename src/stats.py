@@ -24,7 +24,7 @@ def ensure_stats_dir():
     STATS_DIR.mkdir(parents=True, exist_ok=True)
 
 
-def log_event(event_type: str, file_path: str = "", size_bytes: int = 0, pattern: int = 0):
+def log_event(event_type, file_path="", size_bytes=0, pattern=0):
     """Append an RLM event to the stats log."""
     ensure_stats_dir()
     entry = {
@@ -38,7 +38,7 @@ def log_event(event_type: str, file_path: str = "", size_bytes: int = 0, pattern
         f.write(json.dumps(entry) + "\n")
 
 
-def read_events() -> list[dict]:
+def read_events():
     """Read all logged events."""
     if not STATS_FILE.exists():
         return []
@@ -53,7 +53,7 @@ def read_events() -> list[dict]:
     return events
 
 
-def format_size(n: int) -> str:
+def format_size(n):
     if n >= 1024 * 1024:
         return f"{n / (1024 * 1024):.1f}MB"
     if n >= 1024:
@@ -61,7 +61,7 @@ def format_size(n: int) -> str:
     return f"{n}B"
 
 
-def compute_stats(events: list[dict]) -> dict:
+def compute_stats(events):
     """Compute token savings statistics."""
     total_raw_bytes = 0
     total_events = len(events)
@@ -91,7 +91,7 @@ def compute_stats(events: list[dict]) -> dict:
     }
 
 
-def format_tokens(n: int) -> str:
+def format_tokens(n):
     if n >= 1_000_000:
         return f"{n / 1_000_000:.1f}M"
     if n >= 1_000:
@@ -99,12 +99,12 @@ def format_tokens(n: int) -> str:
     return str(n)
 
 
-def savings_bar(pct: float, width: int = 30) -> str:
+def savings_bar(pct, width=30):
     filled = int(pct / 100 * width)
     return f"[{'█' * filled}{'░' * (width - filled)}] {pct:.1f}%"
 
 
-def print_dashboard(stats: dict):
+def print_dashboard(stats):
     """Print a formatted dashboard of token savings."""
     print()
     print("╔══════════════════════════════════════════════════╗")
