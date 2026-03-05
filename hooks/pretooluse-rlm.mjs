@@ -26,6 +26,7 @@ var SIZE_THRESHOLDS = {
 };
 
 var LARGE_OUTPUT_COMMANDS = [
+  // Unix
   /\bcat\b/,
   /\bhead\s+-n\s+\d{4,}/,
   /\btail\s+-n\s+\d{4,}/,
@@ -35,6 +36,14 @@ var LARGE_OUTPUT_COMMANDS = [
   /\bwc\s+-l/,
   /\bcurl\b/,
   /\bwget\b/,
+  // PowerShell / Windows
+  /\bGet-Content\b/i,
+  /\btype\s+/,
+  /\bSelect-String\b/i,
+  /\bGet-ChildItem\b/i,
+  /\bInvoke-WebRequest\b/i,
+  /\bInvoke-RestMethod\b/i,
+  /\biwr\b/i,
 ];
 
 function formatSize(bytes) {
@@ -205,8 +214,8 @@ function handleBash(input) {
   });
   if (!isLargeOutputCmd) return null;
 
-  // Check if the command targets a specific file we can stat
-  var fileMatch = command.match(/(?:cat|head|tail)\s+(?:-[^\s]+\s+)*["']?([^"'\s|>]+)/);
+  // Check if the command targets a specific file we can stat (Unix + PowerShell)
+  var fileMatch = command.match(/(?:cat|head|tail|type|Get-Content)\s+(?:-[^\s]+\s+)*["']?([^"'\s|>]+)/i);
   if (fileMatch) {
     try {
       var resolvedFile = path.resolve(cwd, fileMatch[1]);
@@ -227,8 +236,8 @@ function handleBash(input) {
     }
   }
 
-  // Generic large-output warning for commands like find/grep -r/curl
-  if (/\b(find|grep\s+-r|rg\s+|curl|wget)\b/.test(command)) {
+  // Generic large-output warning for commands like find/grep -r/curl/PowerShell equivalents
+  if (/\b(find|grep\s+-r|rg\s+|curl|wget|Get-ChildItem|Select-String|Invoke-WebRequest|Invoke-RestMethod|iwr)\b/i.test(command)) {
     return {
       hookSpecificOutput: {
         hookEventName: "PreToolUse",

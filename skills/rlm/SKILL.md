@@ -26,7 +26,9 @@ Based on MIT's RLM paper (arXiv:2512.24601) and DSPy's structured REPL pattern. 
 
 ## The 6-Step Protocol
 
-Follow these steps IN ORDER. Each step uses `python3 -c` via Bash. Raw data never enters context — only stdout does.
+Follow these steps IN ORDER. Each step uses `python3 -c` (or `python -c` on Windows) via Bash/shell. Raw data never enters context — only stdout does.
+
+> **Windows note:** Use `python` instead of `python3`. PowerShell commands like `Get-Content`, `Select-String` are also intercepted by the RLM hook — prefer python scripts over PowerShell for data processing.
 
 ### Step 1: METADATA
 

@@ -4,7 +4,7 @@ Key principle: **Tokens are CPU, not storage.** Never dump raw data into context
 
 For the user's request "$ARGUMENTS":
 
-1. **METADATA**: Assess file — type, size, lines, 200-char preview via `python3 -c`. Use **glob** for file discovery (never `find`). **WebFetch is blocked** — download via python3 urllib instead.
+1. **METADATA**: Assess file — type, size, lines, 200-char preview via `python3 -c` (or `python -c` on Windows). Use **glob** for file discovery (never `find`). **WebFetch is blocked** — download via python urllib instead. Prefer python over PowerShell for data processing.
 2. **PEEK**: Sample head/tail/random slices to understand structure
 3. **SEARCH**: Targeted extraction (regex, AST, JSON keys) based on PEEK findings
 

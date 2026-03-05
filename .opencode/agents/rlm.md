@@ -31,7 +31,7 @@ Based on MIT's RLM paper (arXiv:2512.24601) and DSPy's structured REPL pattern. 
 
 ## 6-Step Protocol
 
-Execute IN ORDER. Each step uses `python3 -c`. Raw data never enters context.
+Execute IN ORDER. Each step uses `python3 -c` (or `python -c` on Windows). Raw data never enters context. Prefer python scripts over PowerShell for data processing.
 
 ### Step 1: METADATA
 
