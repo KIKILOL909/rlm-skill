@@ -1,18 +1,26 @@
-import Database from "better-sqlite3"
 import fs from "fs"
 import path from "path"
 import os from "os"
 
+// Runtime-agnostic SQLite: Bun has built-in sqlite, Node uses better-sqlite3
+let DatabaseClass: any
+const isBun = typeof (globalThis as any).Bun !== "undefined"
+if (isBun) {
+  DatabaseClass = require("bun:sqlite").Database
+} else {
+  DatabaseClass = require("better-sqlite3")
+}
+
 const DB_PATH = path.join(os.homedir(), ".rlm", "kb", "store.db")
 
 export class ContentStore {
-  private db: Database.Database
+  private db: any
 
   constructor() {
     const dir = path.dirname(DB_PATH)
     fs.mkdirSync(dir, { recursive: true })
-    this.db = new Database(DB_PATH)
-    this.db.pragma("journal_mode = WAL")
+    this.db = new DatabaseClass(DB_PATH)
+    this.db.exec("PRAGMA journal_mode = WAL")
     this.init()
   }
 
